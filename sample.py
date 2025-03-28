@@ -9,18 +9,18 @@ import tiktoken
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
-init_from = 'resume' # 可以是'resume'（从out_dir）或一个gpt2变体（例如'gpt2-xl'）
+init_from = 'gpt2' # 可以是'resume'（从out_dir）或一个gpt2变体（例如'gpt2-xl'）
 out_dir = 'out' # 如果init_from不是'resume'，则忽略
-start = "\n" # 或"<|endoftext|>"等。也可以指定文件，使用方式："FILE:prompt.txt"
-num_samples = 10 # 要抽取的样本数量
-max_new_tokens = 500 # 每个样本生成的令牌数
+start = "人工智能的未来将会" # 或"<|endoftext|>"等。也可以指定文件，使用方式："FILE:prompt.txt"
+num_samples = 3 # 要抽取的样本数量
+max_new_tokens = 100 # 每个样本生成的令牌数
 temperature = 0.8 # 1.0 = 无变化，< 1.0 = 更少随机性，> 1.0 = 更多随机性
 top_k = 200 # 仅保留最可能的top_k个令牌，将其他令牌的概率设为0
 seed = 1337
 device = 'cuda' # 例如：'cpu'，'cuda'，'cuda:0'，'cuda:1'等
-dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32'或'bfloat16'或'float16'
+dtype = 'float32' # 'float32'或'bfloat16'或'float16'
 compile = False # 使用PyTorch 2.0编译模型以提高速度
-exec(open('configurator.py').read()) # 从命令行或配置文件中覆盖
+exec(open('configurator.py', encoding='utf-8').read()) # 从命令行或配置文件中覆盖
 # -----------------------------------------------------------------------------
 
 torch.manual_seed(seed)

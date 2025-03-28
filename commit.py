@@ -3,12 +3,14 @@
 
 """
 提交脚本 - 简化git提交过程
-用法: python commit.py "提交信息"
+用法: python commit.py ["提交信息"]
+如果不提供提交信息，将使用当前时间作为提交信息
 """
 
 import os
 import sys
 import subprocess
+import datetime
 
 def run_command(command):
     """执行命令并返回结果"""
@@ -51,12 +53,13 @@ def commit(message):
 if __name__ == "__main__":
     # 检查是否提供了提交信息
     if len(sys.argv) < 2:
-        print("错误: 请提供提交信息")
-        print('用法: python commit.py "提交信息"')
-        sys.exit(1)
-    
-    # 获取提交信息
-    commit_message = sys.argv[1]
+        # 使用当前时间作为默认提交信息
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        commit_message = f"自动提交于 {current_time}"
+        print(f"未提供提交信息，使用默认时间信息: {commit_message}")
+    else:
+        # 获取提交信息
+        commit_message = sys.argv[1]
     
     # 执行提交
     if not commit(commit_message):
