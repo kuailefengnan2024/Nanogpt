@@ -11,7 +11,7 @@ from model import GPTConfig, GPT
 # -----------------------------------------------------------------------------
 init_from = 'gpt2' # 可以是'resume'（从out_dir）或一个gpt2变体（例如'gpt2-xl'）
 out_dir = 'out' # 如果init_from不是'resume'，则忽略
-start = "人工智能的未来将会" # 或"<|endoftext|>"等。也可以指定文件，使用方式："FILE:prompt.txt"
+start = "fuck you trump" # 或"<|endoftext|>"等。也可以指定文件，使用方式："FILE:prompt.txt"
 num_samples = 3 # 要抽取的样本数量
 max_new_tokens = 100 # 每个样本生成的令牌数
 temperature = 0.8 # 1.0 = 无变化，< 1.0 = 更少随机性，> 1.0 = 更多随机性
