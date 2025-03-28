@@ -1,9 +1,9 @@
 """
-Full definition of a GPT Language Model, all of it in this single file.
-References:
-1) the official GPT-2 TensorFlow implementation released by OpenAI:
+GPT语言模型的完整定义，所有内容都在这个单一文件中。
+参考资料：
+1) OpenAI发布的官方GPT-2 TensorFlow实现：
 https://github.com/openai/gpt-2/blob/master/src/model.py
-2) huggingface/transformers PyTorch implementation:
+2) huggingface/transformers的PyTorch实现：
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
 """
 
@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 class LayerNorm(nn.Module):
-    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+    """ 带有可选偏置的LayerNorm。PyTorch不直接支持简单的bias=False """
 
     def __init__(self, ndim, bias):
         super().__init__()
@@ -31,47 +31,47 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads, but in a batch
+        # 所有注意力头的key、query、value投影，但是在一个批次中
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
-        # output projection
+        # 输出投影
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        # regularization
+        # 正则化
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
+        # Flash Attention使GPU性能大幅提升，但仅在PyTorch >= 2.0中支持
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-            # causal mask to ensure that attention is only applied to the left in the input sequence
+            print("警告：使用慢速注意力机制。Flash Attention需要PyTorch >= 2.0")
+            # 因果掩码确保注意力只应用于输入序列中的左侧
             self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        B, T, C = x.size() # 批量大小，序列长度，嵌入维度(n_embd)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        # 为批次中的所有头计算query、key、values，并将头前移作为批次维度
         q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        # 因果自注意力; 自注意力计算: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
+            # 使用Flash Attention CUDA内核的高效注意力
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
-            # manual implementation of attention
+            # 手动实现注意力
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # 重新组合所有头的输出并排
 
-        # output projection
+        # 输出投影
         y = self.resid_dropout(self.c_proj(y))
         return y
 
@@ -108,12 +108,12 @@ class Block(nn.Module):
 @dataclass
 class GPTConfig:
     block_size: int = 1024
-    vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+    vocab_size: int = 50304 # GPT-2词汇表大小为50257，为了效率填充到最接近的64的倍数
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
-    bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    bias: bool = True # True：在Linear和LayerNorm中使用偏置，像GPT-2一样。False：稍微更好且更快
 
 class GPT(nn.Module):
 
@@ -131,28 +131,27 @@ class GPT(nn.Module):
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        # with weight tying when using torch.compile() some warnings get generated:
+        # 使用权重绑定时，使用torch.compile()可能会生成一些警告：
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
-        # not 100% sure what this is, so far seems to be harmless. TODO investigate
+        # 不太确定这是什么，到目前为止似乎无害。待研究
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
-        # init all weights
+        # 初始化所有权重
         self.apply(self._init_weights)
-        # apply special scaled init to the residual projections, per GPT-2 paper
+        # 根据GPT-2论文，对残差投影应用特殊的缩放初始化
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
 
-        # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+        # 报告参数数量
+        print("参数数量: %.2fM" % (self.get_num_params()/1e6,))
 
     def get_num_params(self, non_embedding=True):
         """
-        Return the number of parameters in the model.
-        For non-embedding count (default), the position embeddings get subtracted.
-        The token embeddings would too, except due to the parameter sharing these
-        params are actually used as weights in the final layer, so we include them.
+        返回模型中的参数数量。
+        对于非嵌入计数（默认），位置嵌入会被减去。
+        由于参数共享，词嵌入实际上在最后一层中用作权重，所以包括它们。
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
@@ -170,32 +169,32 @@ class GPT(nn.Module):
     def forward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+        assert t <= self.config.block_size, f"无法处理长度为{t}的序列，块大小仅为{self.config.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device) # 形状为(t)
 
-        # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+        # 前向传播GPT模型本身
+        tok_emb = self.transformer.wte(idx) # 令牌嵌入，形状为(b, t, n_embd)
+        pos_emb = self.transformer.wpe(pos) # 位置嵌入，形状为(t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
 
         if targets is not None:
-            # if we are given some desired targets also calculate the loss
+            # 如果给定了目标，也计算损失
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            # 推理时的小优化：仅在最后一个位置前向传播lm_head
+            logits = self.lm_head(x[:, [-1], :]) # 注意：使用列表[-1]以保留时间维度
             loss = None
 
         return logits, loss
 
     def crop_block_size(self, block_size):
-        # model surgery to decrease the block size if necessary
-        # e.g. we may load the GPT2 pretrained model checkpoint (block size 1024)
-        # but want to use a smaller block size for some smaller, simpler model
+        # 模型手术，在必要时减小块大小
+        # 例如，我们可能加载GPT2预训练模型检查点（块大小为1024）
+        # 但想为一些更小、更简单的模型使用更小的块大小
         assert block_size <= self.config.block_size
         self.config.block_size = block_size
         self.transformer.wpe.weight = nn.Parameter(self.transformer.wpe.weight[:block_size])
@@ -206,125 +205,129 @@ class GPT(nn.Module):
     @classmethod
     def from_pretrained(cls, model_type, override_args=None):
         assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
-        override_args = override_args or {} # default to empty dict
-        # only dropout can be overridden see more notes below
+        override_args = override_args or {} # 默认为空字典
+        # 只有dropout可以被覆盖，详见下面的注释
         assert all(k == 'dropout' for k in override_args)
         from transformers import GPT2LMHeadModel
-        print("loading weights from pretrained gpt: %s" % model_type)
+        print("从预训练的gpt加载权重: %s" % model_type)
 
-        # n_layer, n_head and n_embd are determined from model_type
+        # n_layer、n_head和n_embd由model_type决定
         config_args = {
-            'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M params
-            'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M params
-            'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
-            'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
+            'gpt2':         dict(n_layer=12, n_head=12, n_embd=768),  # 124M参数
+            'gpt2-medium':  dict(n_layer=24, n_head=16, n_embd=1024), # 350M参数
+            'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M参数
+            'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M参数
         }[model_type]
-        print("forcing vocab_size=50257, block_size=1024, bias=True")
-        config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
-        config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
-        config_args['bias'] = True # always True for GPT model checkpoints
-        # we can override the dropout rate, if desired
+        print("强制设置vocab_size=50257, block_size=1024, bias=True")
+        config_args['vocab_size'] = 50257 # GPT模型检查点始终为50257
+        config_args['block_size'] = 1024 # GPT模型检查点始终为1024
+        config_args['bias'] = True # GPT模型检查点始终为True
+        # 如果需要，我们可以覆盖dropout率
         if 'dropout' in override_args:
-            print(f"overriding dropout rate to {override_args['dropout']}")
+            print(f"覆盖dropout率为{override_args['dropout']}")
             config_args['dropout'] = override_args['dropout']
-        # create a from-scratch initialized minGPT model
+        # 创建一个从头初始化的minGPT模型
         config = GPTConfig(**config_args)
         model = GPT(config)
         sd = model.state_dict()
         sd_keys = sd.keys()
-        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
+        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # 丢弃这个掩码/缓冲区，不是参数
 
-        # init a huggingface/transformers model
+        # 初始化huggingface/transformers模型
         model_hf = GPT2LMHeadModel.from_pretrained(model_type)
         sd_hf = model_hf.state_dict()
 
-        # copy while ensuring all of the parameters are aligned and match in names and shapes
+        # 复制时确保所有参数对齐，并在名称和形状上匹配
         sd_keys_hf = sd_hf.keys()
-        sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.masked_bias')] # ignore these, just a buffer
-        sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.bias')] # same, just the mask (buffer)
+        sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.masked_bias')] # 忽略这些，只是缓冲区
+        sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.bias')] # 同上，只是掩码（缓冲区）
         transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-        # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
-        # this means that we have to transpose these weights when we import them
-        assert len(sd_keys_hf) == len(sd_keys), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
+        # 基本上，openai检查点使用"Conv1D"模块，但我们只想使用普通的Linear
+        # 这意味着在导入时我们必须转置这些权重
+        assert len(sd_keys_hf) == len(sd_keys), f"键不匹配: {len(sd_keys_hf)} != {len(sd_keys)}"
         for k in sd_keys_hf:
             if any(k.endswith(w) for w in transposed):
-                # special treatment for the Conv1D weights we need to transpose
-                assert sd_hf[k].shape[::-1] == sd[k].shape
+                # 处理转置情况
+                # 在openai的实现中，将(768, 768*3)看作(768, 768, 3)
+                # 因此加载权重时需要转置
+                assert k in sd
                 with torch.no_grad():
-                    sd[k].copy_(sd_hf[k].t())
+                    sd[k].copy_(sd_hf[k].transpose(0, 1))
             else:
-                # vanilla copy over the other parameters
-                assert sd_hf[k].shape == sd[k].shape
+                # 复制
+                assert k in sd
                 with torch.no_grad():
                     sd[k].copy_(sd_hf[k])
 
         return model
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
-        # start with all of the candidate parameters
+        # 首先选择所有候选参数
         param_dict = {pn: p for pn, p in self.named_parameters()}
-        # filter out those that do not require grad
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+        # 创建需要进行权重衰减和不需要的白名单
+        # 任何偏置项或Layer Norm/嵌入层的权重不应该进行权重衰减
+        # Reference: https://github.com/pytorch/pytorch/pull/12402
         decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
         nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {'params': decay_params, 'weight_decay': weight_decay},
-            {'params': nodecay_params, 'weight_decay': 0.0}
-        ]
+        # 验证是否考虑了所有参数
+        param_dict_sans_embed = {n: p for n, p in param_dict.items() 
+                                if not n.endswith('transformer.wpe.weight')}
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-        # Create AdamW optimizer and use the fused version if it is available
+        num_embed_params = self.transformer.wpe.weight.numel()
+        assert num_decay_params + num_nodecay_params + num_embed_params == self.get_num_params(False)
+        # 创建AdamW优化器，添加权重衰减项
+        # Reference: https://github.com/openai/following-paper-rl/blob/main/bypass_batchnorm/adam.py#L18
+        # AdamW优化器会使GPU内存使用更多（几百MB），但训练没有问题
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and device_type == 'cuda'
         extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-        print(f"using fused AdamW: {use_fused}")
+        optimizer = torch.optim.AdamW([
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': nodecay_params, 'weight_decay': 0.0},
+            {'params': self.transformer.wpe.weight, 'weight_decay': 0.0},
+        ], lr=learning_rate, betas=betas, **extra_args)
 
         return optimizer
 
     def estimate_mfu(self, fwdbwd_per_iter, dt):
-        """ estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS """
-        # first estimate the number of flops we do per iteration.
-        # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
+        """ 估计MFU - 模型浮点计算利用率，或者说我们使用了理论浮点性能的多少百分比 """
+        # 参考: https://github.com/openai/following-paper-rl/blob/main/scripts/mfu.py
+        # 计算浮点运算次数
         N = self.get_num_params()
-        cfg = self.config
-        L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd//cfg.n_head, cfg.block_size
+        L, H, Q, T = self.config.n_layer, self.config.n_head, self.config.n_embd//self.config.n_head, self.config.block_size
         flops_per_token = 6*N + 12*L*H*Q*T
         flops_per_fwdbwd = flops_per_token * T
         flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-        # express our flops throughput as ratio of A100 bfloat16 peak flops
-        flops_achieved = flops_per_iter * (1.0/dt) # per second
-        flops_promised = 312e12 # A100 GPU bfloat16 peak flops is 312 TFLOPS
+        # 除以时间，得到每秒浮点运算次数
+        flops_achieved = flops_per_iter * (1.0/dt) # 每秒浮点运算次数
+        # 除以GPU的理论峰值
+        flops_promised = 312e12 # A100的理论峰值是312 TFLOPS
         mfu = flops_achieved / flops_promised
         return mfu
 
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+        接收一个条件序列idx (LongTensor [b,t])，并生成max_new_tokens令牌。
+        应用了简单的batched beam search-like技术来控制采样温度。
         """
         for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
+            # 如果序列太长，截断
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
-            # forward the model to get the logits for the index in the sequence
+            # 前向
             logits, _ = self(idx_cond)
-            # pluck the logits at the final step and scale by desired temperature
+            # 获取序列的最后一个时间步的预测
             logits = logits[:, -1, :] / temperature
-            # optionally crop the logits to only the top k options
+            # 可选：裁剪probabilities变为仅top_k选项
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                 logits[logits < v[:, [-1]]] = -float('Inf')
-            # apply softmax to convert logits to (normalized) probabilities
+            # 应用softmax获取概率
             probs = F.softmax(logits, dim=-1)
-            # sample from the distribution
+            # 采样
             idx_next = torch.multinomial(probs, num_samples=1)
-            # append sampled index to the running sequence and continue
+            # 附加到序列
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx

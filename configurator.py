@@ -1,17 +1,17 @@
 """
-Poor Man's Configurator. Probably a terrible idea. Example usage:
+穷人的配置工具。可能是个糟糕的主意。使用示例：
 $ python train.py config/override_file.py --batch_size=32
-this will first run config/override_file.py, then override batch_size to 32
+这将首先运行config/override_file.py，然后将batch_size覆盖为32
 
-The code in this file will be run as follows from e.g. train.py:
+这个文件中的代码将从例如train.py中这样运行：
 >>> exec(open('configurator.py').read())
 
-So it's not a Python module, it's just shuttling this code away from train.py
-The code in this script then overrides the globals()
+所以它不是一个Python模块，它只是将这段代码从train.py中分离出来
+这个脚本中的代码然后会覆盖globals()
 
-I know people are not going to love this, I just really dislike configuration
-complexity and having to prepend config. to every single variable. If someone
-comes up with a better simple Python solution I am all ears.
+我知道人们可能不会喜欢这种方式，我只是真的不喜欢配置的复杂性
+以及必须在每个变量前面加上config.。如果有人
+想出一个更好的简单Python解决方案，我洗耳恭听。
 """
 
 import sys
@@ -19,29 +19,29 @@ from ast import literal_eval
 
 for arg in sys.argv[1:]:
     if '=' not in arg:
-        # assume it's the name of a config file
+        # 假设它是配置文件的名称
         assert not arg.startswith('--')
         config_file = arg
-        print(f"Overriding config with {config_file}:")
+        print(f"使用{config_file}覆盖配置:")
         with open(config_file) as f:
             print(f.read())
         exec(open(config_file).read())
     else:
-        # assume it's a --key=value argument
+        # 假设它是一个--key=value参数
         assert arg.startswith('--')
         key, val = arg.split('=')
         key = key[2:]
         if key in globals():
             try:
-                # attempt to eval it it (e.g. if bool, number, or etc)
+                # 尝试对其求值（例如，如果是布尔值、数字等）
                 attempt = literal_eval(val)
             except (SyntaxError, ValueError):
-                # if that goes wrong, just use the string
+                # 如果出错，就直接使用字符串
                 attempt = val
-            # ensure the types match ok
+            # 确保类型匹配
             assert type(attempt) == type(globals()[key])
-            # cross fingers
-            print(f"Overriding: {key} = {attempt}")
+            # 祈祷一切顺利
+            print(f"覆盖: {key} = {attempt}")
             globals()[key] = attempt
         else:
-            raise ValueError(f"Unknown config key: {key}")
+            raise ValueError(f"未知配置键: {key}")
