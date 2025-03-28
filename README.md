@@ -1,13 +1,17 @@
-
 # nanoGPT
+# nanoGPT（纳米GPT）
 
 ![nanoGPT](assets/nanogpt.jpg)
 
 The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in about 4 days of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
 
+最简单、最快速的中型GPT训练/微调代码库。它是[minGPT](https://github.com/karpathy/minGPT)的重写版本，注重实用性而非教育性。目前仍在积极开发中，但目前`train.py`文件可以在OpenWebText上复现GPT-2(124M)，在单个8XA100 40GB节点上训练约4天。代码本身简洁易读：`train.py`是一个约300行的样板训练循环，`model.py`是一个约300行的GPT模型定义，可以选择性地从OpenAI加载GPT-2权重。就这么简单。
+
 ![repro124m](assets/gpt2_124M_loss.png)
 
 Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
+
+由于代码非常简单，因此很容易根据您的需求进行修改，从头开始训练新模型，或者微调预训练的检查点（例如，目前可用作起点的最大模型是OpenAI的GPT-2 1.3B模型）。
 
 ## install
 
