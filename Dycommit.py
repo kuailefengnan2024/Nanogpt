@@ -43,7 +43,7 @@ def commit(message):
     
     # 检查是否有更改需要提交
     print("检查是否有更改...")
-    result = subprocess.run("git status --porcelain", shell=True, capture_output=True, text=True)
+    result = subprocess.run("git status --porcelain", shell=True, capture_output=True, text=True, encoding='utf-8')
     if not result.stdout.strip():
         print("没有需要提交的更改")
         return False
@@ -59,7 +59,7 @@ def commit(message):
         return False
     
     # 获取当前分支
-    branch_result = subprocess.run("git branch --show-current", shell=True, capture_output=True, text=True)
+    branch_result = subprocess.run("git branch --show-current", shell=True, capture_output=True, text=True, encoding='utf-8')
     current_branch = branch_result.stdout.strip() or "master"  # 如果为空则默认为master
     
     # 推送到远程仓库
