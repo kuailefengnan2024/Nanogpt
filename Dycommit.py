@@ -19,7 +19,8 @@ def run_command(command):
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE,
         shell=True, 
-        universal_newlines=True
+        universal_newlines=True,
+        encoding='utf-8'  # 明确指定编码为UTF-8
     )
     stdout, stderr = process.communicate()
     
