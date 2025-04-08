@@ -24,14 +24,30 @@ def run_command(command):
     stdout, stderr = process.communicate()
     
     if process.returncode != 0:
-        print(f"错误: {stderr}")
+        print(f"错误: {stderr.strip()}")  # 使用strip()去除多余空白
         return False
     
-    print(stdout)
+    if stdout:
+        print(stdout.strip())  # 只在有输出时打印
     return True
 
 def commit(message):
     """添加、提交并推送更改"""
+    # 检查Git配置
+    print("检查Git配置...")
+    if not run_command("git config user.name") or not run_command("git config user.email"):
+        print("请先配置Git用户名和邮箱:")
+        print("git config --global user.name \"你的名字\"")
+        print("git config --global user.email \"你的邮箱\"")
+        return False
+    
+    # 检查是否有更改需要提交
+    print("检查是否有更改...")
+    result = subprocess.run("git status --porcelain", shell=True, capture_output=True, text=True)
+    if not result.stdout.strip():
+        print("没有需要提交的更改")
+        return False
+    
     # 添加所有更改的文件
     print("正在添加更改的文件...")
     if not run_command("git add ."):
@@ -42,9 +58,13 @@ def commit(message):
     if not run_command(f'git commit -m "{message}"'):
         return False
     
+    # 获取当前分支
+    branch_result = subprocess.run("git branch --show-current", shell=True, capture_output=True, text=True)
+    current_branch = branch_result.stdout.strip() or "master"  # 如果为空则默认为master
+    
     # 推送到远程仓库
-    print("正在推送到远程仓库...")
-    if not run_command("git push origin master"):
+    print(f"正在推送到远程仓库 (分支: {current_branch})...")
+    if not run_command(f"git push origin {current_branch}"):
         return False
     
     print("提交完成!")
