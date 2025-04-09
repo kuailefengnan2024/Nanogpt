@@ -16,18 +16,18 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123
 （如果您的集群没有Infiniband互连，请在命令前加上NCCL_IB_DISABLE=1）
 """
 
-import os
-import time
-import math
-import pickle
-from contextlib import nullcontext
+import os                                      # 操作系统接口，用于文件路径操作
+import time                                    # 时间相关功能，用于计时和日期处理
+import math                                    # 数学函数库
+import pickle                                  # Python对象序列化，用于保存和加载模型
+from contextlib import nullcontext             # 提供空上下文管理器，在条件分支中使用
 
-import numpy as np
-import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
+import numpy as np                             # 科学计算库
+import torch                                   # PyTorch深度学习框架
+from torch.nn.parallel import DistributedDataParallel as DDP  # 分布式数据并行训练
+from torch.distributed import init_process_group, destroy_process_group  # 分布式训练进程管理
 
-from model import GPTConfig, GPT
+from model import GPTConfig, GPT              # 导入自定义的GPT模型和配置类，这是本地自定义模块，GPTConfig定义模型配置参数，GPT是Transformer架构的语言模型实现
 
 # -----------------------------------------------------------------------------
 # 默认配置值，设计用于在OpenWebText上训练gpt2 (124M)

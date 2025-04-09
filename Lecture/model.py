@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+#实现层归一化，稳定网络训练
 class LayerNorm(nn.Module):
     """ 带有可选偏置的LayerNorm。PyTorch不直接支持简单的bias=False """
 
@@ -26,6 +27,7 @@ class LayerNorm(nn.Module):
     def forward(self, input):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
+#实现因果自注意力机制（每个位置只能看到自己和之前的位置）包含多头注意力的计算逻辑
 class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
@@ -75,6 +77,7 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
+#实现多层感知器（前馈神经网络）包含两个线性变换和GELU激活函数
 class MLP(nn.Module):
 
     def __init__(self, config):
@@ -91,6 +94,7 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
+#一个完整的Transformer块 组合以上组件：层归一化 + 自注意力 + 层归一化 + MLP 添加残差连接（加速训练并改善梯度流） 多个Block堆叠构成完整GPT模型
 class Block(nn.Module):
 
     def __init__(self, config):
@@ -105,6 +109,7 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
+# 定义GPT模型的配置类，GPTConfig，用于配置GPT模型的参数
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -115,6 +120,7 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True：在Linear和LayerNorm中使用偏置，像GPT-2一样。False：稍微更好且更快
 
+# 整个实现的核心，将GPT模型的所有组件和功能集成在一起，提供完整的训练和推理能力。将GPTConfig中定义的配置参数实际应用到模型结构中的地方。
 class GPT(nn.Module):
 
     def __init__(self, config):
