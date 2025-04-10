@@ -123,6 +123,9 @@ class GPTConfig:
 # 整个实现的核心，将GPT模型的所有组件和功能集成在一起，提供完整的训练和推理能力。将GPTConfig中定义的配置参数实际应用到模型结构中的地方。
 class GPT(nn.Module):
 
+    # 初始化GPT模型，接受GPTConfig配置参数
+    # 输入：config (GPTConfig) - 模型配置参数对象
+    # 输出：无返回值，初始化模型实例
     def __init__(self, config):
         super().__init__()
         assert config.vocab_size is not None
@@ -153,6 +156,9 @@ class GPT(nn.Module):
         # 报告参数数量
         print("参数数量: %.2fM" % (self.get_num_params()/1e6,))
 
+    # 获取模型中的参数数量
+    # 输入：non_embedding (bool) - 是否排除位置嵌入参数，默认为True
+    # 输出：int - 模型参数总数
     def get_num_params(self, non_embedding=True):
         """
         返回模型中的参数数量。
@@ -164,6 +170,9 @@ class GPT(nn.Module):
             n_params -= self.transformer.wpe.weight.numel()
         return n_params
 
+    # 初始化权重
+    # 输入：module (nn.Module) - 需要初始化权重的模块
+    # 输出：无返回值，直接修改模块权重
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
@@ -172,6 +181,11 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
+    # 前向传播，接受输入索引idx和目标索引targets
+    # 输入：idx (torch.LongTensor [b,t]) - 输入token索引，形状为[batch_size, seq_len]
+    #      targets (torch.LongTensor [b,t], 可选) - 目标token索引，形状同idx
+    # 输出：tuple(torch.FloatTensor, torch.FloatTensor或None) - (logits, loss)，
+    #      logits形状为[b,t,vocab_size]或[b,1,vocab_size]（推理时），loss为标量或None（推理时）
     def forward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
@@ -197,6 +211,9 @@ class GPT(nn.Module):
 
         return logits, loss
 
+    # 模型手术，在必要时减小块大小
+    # 输入：block_size (int) - 新的块大小，必须小于或等于当前配置的块大小
+    # 输出：无返回值，直接修改模型参数
     def crop_block_size(self, block_size):
         # 模型手术，在必要时减小块大小
         # 例如，我们可能加载GPT2预训练模型检查点（块大小为1024）
@@ -208,7 +225,12 @@ class GPT(nn.Module):
             if hasattr(block.attn, 'bias'):
                 block.attn.bias = block.attn.bias[:,:,:block_size,:block_size]
 
+
     @classmethod
+    # 从预训练模型加载权重
+    # 输入：model_type (str) - 预训练模型类型，可选'gpt2'/'gpt2-medium'/'gpt2-large'/'gpt2-xl'
+    #      override_args (dict, 可选) - 可覆盖的参数，目前仅支持'dropout'
+    # 输出：GPT - 加载了预训练权重的GPT模型实例
     def from_pretrained(cls, model_type, override_args=None):
         assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
         override_args = override_args or {} # 默认为空字典
@@ -267,6 +289,12 @@ class GPT(nn.Module):
 
         return model
 
+    # 配置优化器，接受权重衰减、学习率、betas和设备类型
+    # 输入：weight_decay (float) - 权重衰减系数
+    #      learning_rate (float) - 学习率
+    #      betas (tuple(float, float)) - Adam优化器的beta参数
+    #      device_type (str) - 设备类型，如'cuda'或'cpu'
+    # 输出：torch.optim.AdamW - 配置好的优化器
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
         # 首先选择所有候选参数
         param_dict = {pn: p for pn, p in self.named_parameters()}
@@ -296,6 +324,10 @@ class GPT(nn.Module):
 
         return optimizer
 
+    # 估计MFU - 模型浮点计算利用率，或者说我们使用了理论浮点性能的多少百分比
+    # 输入：fwdbwd_per_iter (int) - 每次迭代的前向和后向传播次数
+    #      dt (float) - 每次迭代的时间（秒）
+    # 输出：float - 模型浮点计算利用率（0到1之间的比例）
     def estimate_mfu(self, fwdbwd_per_iter, dt):
         """ 估计MFU - 模型浮点计算利用率，或者说我们使用了理论浮点性能的多少百分比 """
         # 参考: https://github.com/openai/following-paper-rl/blob/main/scripts/mfu.py
@@ -312,6 +344,12 @@ class GPT(nn.Module):
         mfu = flops_achieved / flops_promised
         return mfu
 
+    # 生成函数，接受条件序列idx并生成新token
+    # 输入：idx (torch.LongTensor [b,t]) - 条件序列token索引
+    #      max_new_tokens (int) - 要生成的最大新token数量
+    #      temperature (float, 可选) - 采样温度，默认为1.0
+    #      top_k (int, 可选) - 仅考虑概率最高的top_k个token，默认为None（考虑所有token）
+    # 输出：torch.LongTensor [b,t+max_new_tokens] - 包含条件序列和生成token的完整序列
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """
