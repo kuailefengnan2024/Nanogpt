@@ -74,7 +74,7 @@ dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported
 compile = True # 使用PyTorch 2.0编译模型以提高速度
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-exec(open('configurator.py').read()) # 从命令行或配置文件中覆盖
+exec(open('configurator.py', encoding='utf-8').read()) # 从命令行或配置文件中覆盖
 config = {k: globals()[k] for k in config_keys} # 对日志记录有用
 # -----------------------------------------------------------------------------
 
