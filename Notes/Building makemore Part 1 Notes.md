@@ -347,6 +347,7 @@
 
 ## 6. 关键代码片段示例
 
+```python
     ix = 0  # 起始符号索引
     out = []
     g = torch.Generator().manual_seed(1234)  # 确定性随机生成器
@@ -362,6 +363,7 @@
 
     name = ''.join(out)
     print(name)
+```
 
 ## 7. 表格总结：采样流程与重要函数对比
 
