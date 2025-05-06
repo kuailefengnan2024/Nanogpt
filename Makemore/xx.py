@@ -1,4 +1,6 @@
 import torch
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CUDA not available")
-print(torch.version.cuda) # 查看 PyTorch 编译时使用的 CUDA 版本
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA version: {torch.version.cuda}")
+    print(f"Current GPU: {torch.cuda.get_device_name(torch.cuda.current_device())}")
