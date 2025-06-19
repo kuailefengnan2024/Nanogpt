@@ -9,55 +9,85 @@
   在这个阶段和这个规模下没有必要理解它。
 - 我删除了权重衰减以及围绕哪些参数进行权重衰减的所有复杂性。
   我相信这在我们这里的操作规模下不会产生巨大差异。
-
-
-+---------------+      +----------------------+      +-----------------+
-| [CharDataset] | ---->| [InfiniteDataLoader] | ---->| [Training Loop] |
-+---------------+      +----------------------+      +--------+--------+
-                                                               |
-                                                               v
-+-------------------------------------------------------------------------------------------------------------------------+
-|                                                    Model Training Branches                                                |
-+-------------------------------------------------------------------------------------------------------------------------+
-      |                     |                      |                      |                      |
-      v                     v                      v                      v                      v
-+---------------+     +-----------+          +-----------+          +-----------+          +-----------+
-| [Transformer] |     |   [BoW]   |          |   [RNN]   |          |   [MLP]   |          |  [Bigram] |
-+---------------+     +-----------+          +-----------+          +-----------+          +-----------+
-      |                     |                      |                      |                      |
-      v                     v                      v                      v                      v
-+---------------+     +------------+         +-----------+          +-------------+        +-------------+
-|    [Block]    |     | [BoWBlock] |         | [RNNCell] |          | (MLP Int.)  |        | (Bigram Int)|
-| (Contains...) |     +------------+         |  or       |          | (Emb,Concat,|        | (Emb Lookup)|
-+---------------+           |                | [GRUCell] |          | Hid+Act...) |        +-------------+
-      |                     v                +-----------+          +-------------+              |
-      v               +-------------+              |                      |                      |
-+-------------+       | [CausalBoW] |              |                      |                      |
-| [CausalSelf |       +-------------+              |                      |                      |
-|  Attention] |             |                      |                      |                      |
-+-------------+             |                      |                      |                      |
-      |                     |                      |                      |                      |
-      | (Block Output)      | (Pooled Embed)       | (Hidden State)       | (Last Hidden)        | (Embedding)
-      v                     v                      v                      v                      v
-+-------------+     +-------------+        +-------------+        +-------------+        +-------------+
-| [Linear     |     | [Linear     |        | [Linear     |        | [Linear     |        | [Linear     |
-| (Output)]   |     | (Output)]   |        | (Output)]   |        | (Output)]   |        | (Output)]   |
-+-------------+     +-------------+        +-------------+        +-------------+        +-------------+
-      |                     |                      |                      |                      |
-      v                     v                      v                      v                      v
-+-------------+     +-------------+        +-------------+        +-------------+        +-------------+
-|   Logits    |     |   Logits    |        |   Logits    |        |   Logits    |        |   Logits    |
-+-------------+     +-------------+        +-------------+        +-------------+        +-------------+
-      |                     |                      |                      |                      |
-      +---------------------+----------------------+----------------------+----------------------+
-                                             |
-                                             v
-                                     +-----------------+
-                                     | Loss Calculation|
-                                     | (in Training L.)|
-                                     +-----------------+
-
 """
+
+# =============================================================================
+# 🔧 配置设置区域 - 在这里修改你的训练设置
+# =============================================================================
+
+# 📁 文件和输出设置
+INPUT_FILE = 'names.txt'              # 输入文件路径（每行一个单词）
+WORK_DIR = 'out'                      # 输出目录
+RESUME = False                        # 是否从现有模型恢复训练
+SAMPLE_ONLY = False                   # 是否只采样不训练
+
+# 🤖 模型设置 - 选择模型类型
+MODEL_TYPE = 'transformer'            # 模型类型: transformer|bigram|mlp|rnn|gru|bow
+
+# 📊 各模型参数说明和设置
+# ┌─────────────┬─────────┬─────────┬─────────┬──────────┬──────────┐
+# │ 模型        │ n_layer │ n_head  │ n_embd  │ n_embd2  │ 说明     │
+# ├─────────────┼─────────┼─────────┼─────────┼──────────┼──────────┤
+# │ transformer │    ✓    │    ✓    │    ✓    │    ✓     │ 全部需要  │
+# │ bigram      │    ✗    │    ✗    │    ✗    │    ✗     │ 仅需词汇  │
+# │ mlp         │    ✗    │    ✗    │    ✓    │    ✓     │ 嵌入维度  │
+# │ rnn/gru     │    ✗    │    ✗    │    ✓    │    ✓     │ 嵌入维度  │
+# │ bow         │    ✗    │    ✗    │    ✓    │    ✓     │ 嵌入维度  │
+# └─────────────┴─────────┴─────────┴─────────┴──────────┴──────────┘
+
+# 🏗️ 模型架构参数（根据上表，某些模型会忽略不需要的参数）
+N_LAYER = 4                          # Transformer层数（仅transformer使用）
+N_HEAD = 4                           # 注意力头数（仅transformer使用）
+N_EMBD = 64                          # 主要嵌入维度（transformer|mlp|rnn|gru|bow）
+N_EMBD2 = 64                         # 辅助嵌入维度（transformer|mlp|rnn|gru|bow）
+
+# 🏃 训练设置
+BATCH_SIZE = 32                      # 批大小
+LEARNING_RATE = 5e-4                 # 学习率
+WEIGHT_DECAY = 0.01                  # 权重衰减
+MAX_STEPS = -1                       # 最大训练步数（-1为无限）
+
+# 💻 系统设置
+DEVICE = 'cuda'                       # 计算设备: cpu|cuda|cuda:0|mps
+SEED = 3407                          # 随机种子
+NUM_WORKERS = 4                      # 数据加载线程数
+
+# 🎲 采样设置
+TOP_K = -1                           # Top-K采样（-1为不使用）
+
+# 🎛️ 快速配置预设（取消注释来使用）
+# 如果你想快速切换模型配置，可以取消注释下面的配置组合：
+
+# # Bigram模型（最简单）
+# MODEL_TYPE = 'bigram'
+# BATCH_SIZE = 64
+# LEARNING_RATE = 1e-3
+# MAX_STEPS = 1000
+
+# # MLP模型（经典）
+# MODEL_TYPE = 'mlp'
+# N_EMBD = 128
+# N_EMBD2 = 128
+# BATCH_SIZE = 32
+# MAX_STEPS = 5000
+
+# # RNN模型（循环）
+# MODEL_TYPE = 'rnn'
+# N_EMBD = 128
+# N_EMBD2 = 128
+# LEARNING_RATE = 1e-3
+# MAX_STEPS = 10000
+
+# # Transformer模型（最强）
+# MODEL_TYPE = 'transformer'
+# N_LAYER = 6
+# N_HEAD = 8
+# N_EMBD = 128
+# N_EMBD2 = 128
+# BATCH_SIZE = 32
+# MAX_STEPS = 10000
+
+# =============================================================================
 
 
 
@@ -65,7 +95,6 @@ import os
 import sys
 import time
 import math
-import argparse
 from dataclasses import dataclass
 from typing import List
 
@@ -637,33 +666,79 @@ class InfiniteDataLoader:
         return batch
 
 # -----------------------------------------------------------------------------
+
+class Config:
+    """配置类，用于存储所有训练参数"""
+    def __init__(self):
+        # 从全局变量中读取配置
+        self.input_file = INPUT_FILE
+        self.work_dir = WORK_DIR
+        self.resume = RESUME
+        self.sample_only = SAMPLE_ONLY
+        self.num_workers = NUM_WORKERS
+        self.max_steps = MAX_STEPS
+        self.device = DEVICE
+        self.seed = SEED
+        self.top_k = TOP_K
+        self.type = MODEL_TYPE
+        self.n_layer = N_LAYER
+        self.n_head = N_HEAD
+        self.n_embd = N_EMBD
+        self.n_embd2 = N_EMBD2
+        self.batch_size = BATCH_SIZE
+        self.learning_rate = LEARNING_RATE
+        self.weight_decay = WEIGHT_DECAY
+    
+    def get_relevant_params(self):
+        """返回当前模型类型相关的参数"""
+        model_params = {
+            'transformer': ['n_layer', 'n_head', 'n_embd', 'n_embd2'],
+            'bigram': [],  # bigram只需要vocab_size，会自动从数据获取
+            'mlp': ['n_embd', 'n_embd2'],
+            'rnn': ['n_embd', 'n_embd2'],
+            'gru': ['n_embd', 'n_embd2'],
+            'bow': ['n_embd', 'n_embd2']
+        }
+        return model_params.get(self.type, [])
+    
+    def get_unused_params(self):
+        """返回当前模型类型不使用的参数"""
+        all_params = ['n_layer', 'n_head', 'n_embd', 'n_embd2']
+        relevant = self.get_relevant_params()
+        return [p for p in all_params if p not in relevant]
+
+# -----------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    # 解析命令行参数
-    parser = argparse.ArgumentParser(description="Make More")
-    # 系统/输入/输出
-    parser.add_argument('--input-file', '-i', type=str, default='names.txt', help="输入文件，每行一个内容")
-    parser.add_argument('--work-dir', '-o', type=str, default='out', help="输出工作目录")
-    parser.add_argument('--resume', action='store_true', help="使用此标志时，我们将从工作目录中现有的模型恢复优化")
-    parser.add_argument('--sample-only', action='store_true', help="仅从模型采样并退出，不进行训练")
-    parser.add_argument('--num-workers', '-n', type=int, default=4, help="训练/测试的数据工作线程数")
-    parser.add_argument('--max-steps', type=int, default=-1, help="要运行的最大优化步数，或 -1 表示无限。")
-    parser.add_argument('--device', type=str, default='cpu', help="用于计算的设备，例如：cpu|cuda|cuda:2|mps")
-    parser.add_argument('--seed', type=int, default=3407, help="随机种子")
-    # 采样
-    parser.add_argument('--top-k', type=int, default=-1, help="用于采样的 top-k，-1 表示无 top-k")
-    # 模型
-    parser.add_argument('--type', type=str, default='transformer', help="要使用的模型类类型，bigram|mlp|rnn|gru|bow|transformer")
-    parser.add_argument('--n-layer', type=int, default=4, help="层数")
-    parser.add_argument('--n-head', type=int, default=4, help="头数（在 transformer 中）")
-    parser.add_argument('--n-embd', type=int, default=64, help="模型中的特征通道数")
-    parser.add_argument('--n-embd2', type=int, default=64, help="模型中其他地方的特征通道数")
-    # 优化
-    parser.add_argument('--batch-size', '-b', type=int, default=32, help="优化期间的批大小")
-    parser.add_argument('--learning-rate', '-l', type=float, default=5e-4, help="学习率")
-    parser.add_argument('--weight-decay', '-w', type=float, default=0.01, help="权重衰减")
-    args = parser.parse_args()
-    print(vars(args))
+    # 创建配置对象
+    args = Config()
+    
+    print("🔧 当前配置设置:")
+    print(f"  📁 输入文件: {args.input_file}")
+    print(f"  📁 输出目录: {args.work_dir}")
+    print(f"  🤖 模型类型: {args.type}")
+    
+    # 显示模型相关参数
+    relevant_params = args.get_relevant_params()
+    unused_params = args.get_unused_params()
+    
+    print(f"  🏗️  模型架构参数:")
+    for param in ['n_layer', 'n_head', 'n_embd', 'n_embd2']:
+        value = getattr(args, param)
+        if param in relevant_params:
+            print(f"     ✅ {param}: {value} (使用)")
+        elif param in unused_params:
+            print(f"     ⚪ {param}: {value} (忽略)")
+    
+    print(f"  🏃 训练参数:")
+    print(f"     批大小: {args.batch_size}")
+    print(f"     学习率: {args.learning_rate}")
+    print(f"     权重衰减: {args.weight_decay}")
+    print(f"  💻 系统设置:")
+    print(f"     设备: {args.device}")
+    print(f"     最大步数: {args.max_steps}")
+    print(f"     随机种子: {args.seed}")
+    print("-" * 50)
 
     # 系统初始化
     torch.manual_seed(args.seed)
